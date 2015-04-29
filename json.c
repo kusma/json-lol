@@ -293,19 +293,6 @@ struct json_value *parse_value(struct parser *p)
 	case '[': return parse_array(p);
 	case '"': return parse_string(p);
 
-/*
-#define MATCH_KEYWORD(first_char, rest, ttype, field, vvalue) \
-	case first_char: \
-		if (strncmp(p->str + 1, rest, strlen(rest))) { \
-			struct json_value *ret = malloc(sizeof(*ret)); \
-			ret->type = JSON_##ttype; \
-			ret->value.field = vvalue; \
-			consume_span(p, 1 + strlen(rest)); \
-		} else \
-			unexpected_token(p);
-
-	MATCH_KEYWORD('t', "rue", BOOLEAN, boolean, 1)
-*/
 	case 't':
 		if (!strncmp(p->str + 1, "rue", 3)) {
 			struct json_value *ret = malloc(sizeof(*ret));
