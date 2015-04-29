@@ -98,6 +98,25 @@ void expect(struct parser *p, char ch)
 	consume(p);
 }
 
+unsigned short parse_hexquad(struct parser *p)
+{
+	unsigned short val = 0;
+	int i;
+	for (i = 0; i < 4; ++i) {
+		char ch;
+		if (!isxdigit(next(p)))
+			unexpected_token(p);
+
+		val <<= 4;
+		ch = consume(p);
+		if ('0' <= ch && ch <= '9')
+			val |= ch - '0';
+		else
+			val |= 10 + tolower(ch) - 'a';
+	}
+	return val;
+}
+
 const char *parse_raw_string(struct parser *p)
 {
 	int len = 0;
@@ -105,7 +124,9 @@ const char *parse_raw_string(struct parser *p)
 
 	expect(p, '"');
 	while (next(p) != '"') {
+		unsigned int u, bm = 0;
 		char ch;
+		int i, t = 0;
 		switch (next(p)) {
 		case '\\':
 			consume(p);
@@ -119,7 +140,44 @@ const char *parse_raw_string(struct parser *p)
 			case 'r': ch = '\r'; break;
 			case 't': ch = '\t'; break;
 
-			/* TODO: unicode "\uXXXX" */
+			case 'u':
+				consume(p);
+				u = parse_hexquad(p);
+				if (u >= 0xd800 && u <= 0xdbff) {
+					/* start surrogate pair */
+					unsigned short b;
+					expect(p, '\\');
+					expect(p, 'u');
+					b = parse_hexquad(p);
+					if (b >= 0xdc00 && b < 0xdfff) {
+						/* end surrogate pair */
+						u = (u << 10) + b - 0x35fdc00;
+						if (u > 0x10ffff)
+							parse_error(p, "invalid unicode code-point");
+					} else
+						parse_error(p, "surrogate pair mismatch");
+				}
+
+				if (u >= 0x10000) {
+					t = 3;
+					bm = 0xf0;
+				} else if (u >= 0x800) {
+					t = 2;
+					bm = 0xe0;
+				} else if (u >= 0x80) {
+					t = 1;
+					bm = 0xc0;
+				}
+
+				ret = realloc(ret, len + 2 + t);
+				if (!ret)
+					parse_error(p, "out of memory");
+
+				ret[len++] = bm | (u >> (6 * t)) & 0x7f;
+				for (i = 0; i < t; ++i)
+					ret[len++] = 0x80 | (u >> (6 * (t - 1 - i))) & 0xbf;
+				continue;
+
 			default:
 				unexpected_token(p);
 			}
@@ -366,7 +424,10 @@ void print_string(const char *str)
 			continue;
 
 		default:
-			printf("%c", ch);
+			if (isascii(ch))
+				printf("%c (%d)", ch, ch);
+			else
+				printf("\\x%02X", (unsigned char)ch);
 		}
 	}
 	printf("\"");
@@ -428,7 +489,9 @@ void json_dump(struct json_value *obj, int ind)
 
 int main()
 {
-	const char *str = "{ \"foo\" : [ \"b\\nar\", -1e+1, \"foo\" ] }";
-	struct json_value *value = json_parse(str);
+	const char *str = "{ \"foo\" : [ \"b\\nar\", -1e+1, \"foo \\uD834\\uDD1E \" ] }";
+	struct json_value *value;
+	printf("input: %s\n", str);
+	value = json_parse(str);
 	json_dump(value, 0);
 }
