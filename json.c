@@ -123,7 +123,7 @@ const char *parse_raw_string(struct parser *p)
 					expect(p, '\\');
 					expect(p, 'u');
 					b = parse_hexquad(p);
-					if (b >= 0xdc00 && b < 0xdfff) {
+					if (b >= 0xdc00 && b <= 0xdfff) {
 						/* end surrogate pair */
 						u = (u << 10) + b - 0x35fdc00;
 						if (u > 0x10ffff)
