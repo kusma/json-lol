@@ -196,22 +196,29 @@ struct json_value *parse_object(struct parser *p)
 	ret->value.object.num_properties = 0;
 
 	expect(p, '{');
-	if (next(p) != '}') {
-		do {
-			void *tmp;
-			struct json_value *value;
-			const char *name = parse_raw_string(p);
-			expect(p, ':');
-			value = parse_value(p);
+	if (next(p) == '}') {
+		consume(p);
+		return ret;
+	}
 
-			tmp = realloc(ret->value.object.properties, sizeof(*ret->value.object.properties) * (ret->value.object.num_properties + 1));
-			if (!tmp)
-				parse_error(p, "out of memory");
-			ret->value.object.properties = tmp;
-			ret->value.object.properties[ret->value.object.num_properties].name = name;
-			ret->value.object.properties[ret->value.object.num_properties].value = value;
-			++ret->value.object.num_properties;
-		} while (next(p) == ',');
+	while (1) {
+		void *tmp;
+		struct json_value *value;
+		const char *name = parse_raw_string(p);
+		expect(p, ':');
+		value = parse_value(p);
+
+		tmp = realloc(ret->value.object.properties, sizeof(*ret->value.object.properties) * (ret->value.object.num_properties + 1));
+		if (!tmp)
+			parse_error(p, "out of memory");
+		ret->value.object.properties = tmp;
+		ret->value.object.properties[ret->value.object.num_properties].name = name;
+		ret->value.object.properties[ret->value.object.num_properties].value = value;
+		++ret->value.object.num_properties;
+
+		if (next(p) == '}')
+			break;
+		expect(p, ',');
 	}
 	consume(p);
 
