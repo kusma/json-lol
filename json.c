@@ -158,6 +158,8 @@ const char *parse_raw_string(struct parser *p)
 			break;
 
 		default:
+			if (iscntrl(next(p)))
+				unexpected_token(p);
 			ch = consume(p);
 		}
 
