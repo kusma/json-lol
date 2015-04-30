@@ -42,7 +42,7 @@ void print_string(const char *str)
 
 		default:
 			if (isascii(ch))
-				printf("%c (%d)", ch, ch);
+				printf("%c", ch);
 			else
 				printf("\\x%02X", (unsigned char)ch);
 		}
