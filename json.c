@@ -1,6 +1,9 @@
 #include "json.h"
 
 #include <stddef.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
 
 const char *skip_space(const char *str)
 {
@@ -29,10 +32,6 @@ static void init_parser(struct parser *p, const char *str)
 	p->str = skip_space(str);
 	p->error = NULL;
 }
-
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
 
 void parse_error(struct parser *p, const char *fmt, ...)
 {
