@@ -302,33 +302,6 @@ struct json_value *parse_value(struct parser *p)
 	case '"': return parse_string(p);
 
 	case 't':
-		if (!strncmp(p->str + 1, "rue", 3)) {
-			struct json_value *ret = malloc(sizeof(*ret));
-			ret->type = JSON_BOOLEAN;
-			ret->value.boolean = 1;
-			consume_span(p, 4);
-			return ret;
-		} else
-			unexpected_token(p);
-
-	case 'f':
-		if (!strncmp(p->str + 1, "alse", 4)) {
-			struct json_value *ret = malloc(sizeof(*ret));
-			ret->type = JSON_BOOLEAN;
-			ret->value.boolean = 0;
-			consume_span(p, 5);
-			return ret;
-		} else
-			unexpected_token(p);
-
-	case 'n':
-		if (!strncmp(p->str + 1, "ull", 3)) {
-			struct json_value *ret = malloc(sizeof(*ret));
-			ret->type = JSON_NULL;
-			consume_span(p, 4);
-			return ret;
-		} else
-			unexpected_token(p);
 
 	case '-':
 	case '0': case '1': case '2': case '3': case '4':
@@ -336,6 +309,24 @@ struct json_value *parse_value(struct parser *p)
 		return parse_number(p);
 
 	default:
+		if (!strncmp(p->str, "true", 4)) {
+			struct json_value *ret = malloc(sizeof(*ret));
+			ret->type = JSON_BOOLEAN;
+			ret->value.boolean = 1;
+			consume_span(p, 4);
+			return ret;
+		} else if (!strncmp(p->str, "false", 5)) {
+			struct json_value *ret = malloc(sizeof(*ret));
+			ret->type = JSON_BOOLEAN;
+			ret->value.boolean = 0;
+			consume_span(p, 5);
+			return ret;
+		} else if (!strncmp(p->str, "null", 4)) {
+			struct json_value *ret = malloc(sizeof(*ret));
+			ret->type = JSON_NULL;
+			consume_span(p, 4);
+			return ret;
+		}
 		unexpected_token(p);
 	}
 }
