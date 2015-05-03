@@ -343,13 +343,10 @@ struct json_value *parse_value(struct parser *p)
 
 struct json_value *json_parse(const char *str)
 {
+	struct json_value *ret;
 	struct parser p;
 	init_parser(&p, str);
-
-	switch (next(&p)) {
-	case '{': return parse_object(&p);
-	case '[': return parse_array(&p);
-	default:
-		unexpected_token(&p);
-	}
+	ret = parse_value(&p);
+	expect(&p, '\0');
+	return ret;
 }
