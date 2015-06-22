@@ -25,10 +25,12 @@ const char *skip_space(const char *str)
 struct parser {
 	const char *str;
 	const char *error;
+	unsigned char skip_space : 1;
 };
 
 static void init_parser(struct parser *p, const char *str)
 {
+	p->skip_space = 1;
 	p->str = skip_space(str);
 	p->error = NULL;
 }
@@ -49,14 +51,17 @@ char next(struct parser *p)
 
 char consume(struct parser *p)
 {
-	char ret = *p->str;
-	p->str = skip_space(p->str + 1);
+	char ret = *p->str++;
+	if (p->skip_space)
+		p->str = skip_space(p->str);
 	return ret;
 }
 
 void consume_span(struct parser *p, int chars)
 {
-	p->str = skip_space(p->str + chars);
+	p->str = p->str + chars;
+	if (p->skip_space)
+		p->str = skip_space(p->str + chars);
 }
 
 void unexpected_token(struct parser *p)
@@ -96,6 +101,7 @@ const char *parse_raw_string(struct parser *p)
 	char *ret = malloc(1);
 
 	expect(p, '"');
+	p->skip_space = 0;
 	while (next(p) != '"') {
 		unsigned int u, bm = 0;
 		char ch;
@@ -167,6 +173,7 @@ const char *parse_raw_string(struct parser *p)
 			parse_error(p, "out of memory");
 		ret[len++] = ch;
 	}
+	p->skip_space = 1;
 	consume(p);
 
 	ret[len] = '\0';
