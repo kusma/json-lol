@@ -1,11 +1,11 @@
 #include "json.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 void print_string(const char *str)
 {
 	printf("\"");
 	while (*str) {
-		/* TODO: unicode */
 		char ch = *str++;
 		switch (ch) {
 		case '\"':
@@ -104,11 +104,38 @@ void json_dump(struct json_value *obj, int ind)
 	}
 }
 
+static char *read_file(FILE *fp)
+{
+	char *buf = NULL, *new_buf;
+	size_t buf_size = 0, buf_room = 1000;
+
+	/* load whole file into memory */
+	while (!feof(fp)) {
+		buf_room = (buf_room * 3) >> 1; /* grow by 1.5 */
+		buf = realloc(buf, buf_room);
+		if (!buf) {
+			perror("realloc");
+			exit(1);
+		}
+		buf_size += fread(buf + buf_size, 1,
+		    buf_room - buf_size, fp);
+	}
+	fclose(fp);
+
+	/* cap buffer, and zero-terminate */
+	new_buf = realloc(buf, buf_size + 1);
+	if (!new_buf)
+		perror("realloc");
+	else
+		buf = new_buf;
+	buf[buf_size] = '\0';
+	return buf;
+}
+
 int main()
 {
-	const char *str = "{ \"foo\" : [ \"b\\nar\", -1e+1, \"foo \\uD834\\uDD1E \" ] }";
-	struct json_value *value;
-	printf("input: %s\n", str);
-	value = json_parse(str);
+	char *str = read_file(stdin);
+	struct json_value *value = json_parse(str);
 	json_dump(value, 0);
+	return 0;
 }
