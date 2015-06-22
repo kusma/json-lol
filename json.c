@@ -95,6 +95,33 @@ unsigned short parse_hexquad(struct parser *p)
 	return val;
 }
 
+unsigned int parse_escaped_char(struct parser *p)
+{
+	char ch;
+	expect(p, '\\');
+
+	switch (next(p)) {
+	case '"': ch = '"'; break;
+	case '\\': ch = '\\'; break;
+	case '/': ch = '/'; break;
+	case 'b': ch = '\b'; break;
+	case 'f': ch = '\f'; break;
+	case 'n': ch = '\n'; break;
+	case 'r': ch = '\r'; break;
+	case 't': ch = '\t'; break;
+
+	case 'u':
+		consume(p);
+		return parse_hexquad(p);
+
+	default:
+		unexpected_token(p);
+	}
+
+	consume(p);
+	return ch;
+}
+
 const char *parse_raw_string(struct parser *p)
 {
 	int len = 0;
@@ -103,64 +130,55 @@ const char *parse_raw_string(struct parser *p)
 	expect(p, '"');
 	p->skip_space = 0;
 	while (next(p) != '"') {
-		unsigned int u, bm = 0;
-		char ch;
+		unsigned int ch, bm = 0;
 		int i, t = 0;
 		switch (next(p)) {
 		case '\\':
-			consume(p);
-			switch (next(p)) {
-			case '"': ch = '"'; break;
-			case '\\': ch = '\\'; break;
-			case '/': ch = '/'; break;
-			case 'b': ch = '\b'; break;
-			case 'f': ch = '\f'; break;
-			case 'n': ch = '\n'; break;
-			case 'r': ch = '\r'; break;
-			case 't': ch = '\t'; break;
+			ch = parse_escaped_char(p);
 
-			case 'u':
-				consume(p);
-				u = parse_hexquad(p);
-				if (u >= 0xd800 && u <= 0xdbff) {
-					/* start surrogate pair */
-					unsigned short b;
-					expect(p, '\\');
-					expect(p, 'u');
-					b = parse_hexquad(p);
-					if (b >= 0xdc00 && b <= 0xdfff) {
-						/* end surrogate pair */
-						u = (u << 10) + b - 0x35fdc00;
-						if (u > 0x10ffff)
-							parse_error(p, "invalid unicode code-point");
-					} else
-						parse_error(p, "surrogate pair mismatch");
+			if (ch >= 0xd800 && ch <= 0xdbff && next(p) == '\\') {
+				/* start surrogate pair */
+				unsigned int ch2 = parse_escaped_char(p);
+				if (ch2 >= 0xdc00 && ch2 <= 0xdfff) {
+					/* end surrogate pair */
+					ch = (ch << 10) + ch2 - 0x35fdc00;
+					if (ch > 0x10ffff)
+						parse_error(p, "invalid unicode code-point");
+				} else {
+					ret = realloc(ret, len + 2);
+					if (!ret)
+						parse_error(p, "out of memory");
+					ret[len++] = ch;
+					ret[len++] = ch2;
 				}
-
-				if (u >= 0x10000) {
-					t = 3;
-					bm = 0xf0;
-				} else if (u >= 0x800) {
-					t = 2;
-					bm = 0xe0;
-				} else if (u >= 0x80) {
-					t = 1;
-					bm = 0xc0;
-				}
-
-				ret = realloc(ret, len + 2 + t);
-				if (!ret)
-					parse_error(p, "out of memory");
-
-				ret[len++] = bm | (u >> (6 * t)) & 0x7f;
-				for (i = 0; i < t; ++i)
-					ret[len++] = 0x80 | (u >> (6 * (t - 1 - i))) & 0xbf;
-				continue;
-
-			default:
-				unexpected_token(p);
 			}
-			break;
+
+			if (ch < 128)
+				break;
+
+			/* UNICODE, UTF-8 encode */
+
+			if (ch >= 0x10000) {
+				t = 3;
+				bm = 0xf0;
+			} else if (ch >= 0x800) {
+				t = 2;
+				bm = 0xe0;
+			} else if (ch >= 0x80) {
+				t = 1;
+				bm = 0xc0;
+			}
+
+
+			ret = realloc(ret, len + 2 + t);
+			if (!ret)
+				parse_error(p, "out of memory");
+
+			ret[len++] = bm | (ch >> (6 * t)) & 0x7f;
+			for (i = 0; i < t; ++i)
+				ret[len++] = 0x80 | (ch >> (6 * (t - 1 - i))) & 0xbf;
+
+			continue;
 
 		default:
 			if (iscntrl(next(p)))
