@@ -62,7 +62,7 @@ void consume_span(struct parser *p, int chars)
 {
 	p->str = p->str + chars;
 	if (p->skip_space)
-		p->str = skip_space(p->str + chars);
+		p->str = skip_space(p->str);
 }
 
 void unexpected_token(struct parser *p)
