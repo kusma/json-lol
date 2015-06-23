@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <assert.h>
 
 const char *skip_space(const char *str)
 {
@@ -124,8 +125,9 @@ unsigned int parse_escaped_char(struct parser *p)
 
 const char *parse_raw_string(struct parser *p)
 {
-	int len = 0;
-	char *ret = malloc(1);
+	int i, len = 0, pos = 0;
+	unsigned int *tmp = malloc(1);
+	char *ret;
 
 	expect(p, '"');
 	p->skip_space = 0;
@@ -145,40 +147,15 @@ const char *parse_raw_string(struct parser *p)
 					if (ch > 0x10ffff)
 						parse_error(p, "invalid unicode code-point");
 				} else {
-					ret = realloc(ret, len + 2);
-					if (!ret)
+					tmp = realloc(tmp, (len + 2) * sizeof(*tmp));
+					if (!tmp)
 						parse_error(p, "out of memory");
-					ret[len++] = ch;
-					ret[len++] = ch2;
+					tmp[len++] = ch;
+					tmp[len++] = ch2;
+					continue;
 				}
 			}
-
-			if (ch < 128)
-				break;
-
-			/* UNICODE, UTF-8 encode */
-
-			if (ch >= 0x10000) {
-				t = 3;
-				bm = 0xf0;
-			} else if (ch >= 0x800) {
-				t = 2;
-				bm = 0xe0;
-			} else if (ch >= 0x80) {
-				t = 1;
-				bm = 0xc0;
-			}
-
-
-			ret = realloc(ret, len + 2 + t);
-			if (!ret)
-				parse_error(p, "out of memory");
-
-			ret[len++] = bm | (ch >> (6 * t)) & 0x7f;
-			for (i = 0; i < t; ++i)
-				ret[len++] = 0x80 | (ch >> (6 * (t - 1 - i))) & 0xbf;
-
-			continue;
+			break;
 
 		default:
 			if (iscntrl(next(p)))
@@ -186,16 +163,43 @@ const char *parse_raw_string(struct parser *p)
 			ch = consume(p);
 		}
 
-		ret = realloc(ret, len + 2);
-		if (!ret)
+		tmp = realloc(tmp, (len + 1) * sizeof(*tmp));
+		if (!tmp)
 			parse_error(p, "out of memory");
-		ret[len++] = ch;
+
+		tmp[len++] = ch;
 	}
 	p->skip_space = 1;
 	consume(p);
 
-	ret[len] = '\0';
-	return ret;
+	ret = malloc(len * 4 + 1);
+	if (!ret)
+		parse_error(p, "out of memory");
+
+	for (i = 0; i < len; ++i) {
+		unsigned int ch = tmp[i], bm = 0;
+		int j, t = 0;
+
+		if (ch >= 0x10000) {
+			t = 3;
+			bm = 0xf0;
+		} else if (ch >= 0x800) {
+			t = 2;
+			bm = 0xe0;
+		} else if (ch >= 0x80) {
+			t = 1;
+			bm = 0xc0;
+		}
+
+		ret[pos++] = bm | (ch >> (6 * t)) & 0x7f;
+		for (j = 0; j < t; ++j)
+			ret[pos++] = 0x80 | (ch >> (6 * (t - 1 - i))) & 0xbf;
+	}
+	assert(pos <= 4 * len);
+	ret[pos] = '\0';
+
+	free(tmp);
+	return ret; /* TODO: trim 'ret' to actually used size */
 }
 
 
