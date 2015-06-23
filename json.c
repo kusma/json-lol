@@ -331,8 +331,6 @@ struct json_value *parse_value(struct parser *p)
 	case '[': return parse_array(p);
 	case '"': return parse_string(p);
 
-	case 't':
-
 	case '-':
 	case '0': case '1': case '2': case '3': case '4':
 	case '5': case '6': case '7': case '8': case '9':
