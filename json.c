@@ -41,6 +41,7 @@ void parse_error(struct parser *p, const char *fmt, ...)
 	va_list va;
 	va_start(va, fmt);
 	vfprintf(stderr, fmt, va);
+	putc('\n', stderr);
 	va_end(va);
 	exit(1);
 }
