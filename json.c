@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-const char *skip_space(const char *str)
+static const char *skip_space(const char *str)
 {
 	while (1) {
 		switch (*str) {
@@ -36,7 +36,7 @@ static void init_parser(struct parser *p, const char *str)
 	p->error = NULL;
 }
 
-void parse_error(struct parser *p, const char *fmt, ...)
+static void parse_error(struct parser *p, const char *fmt, ...)
 {
 	va_list va;
 	va_start(va, fmt);
@@ -46,12 +46,12 @@ void parse_error(struct parser *p, const char *fmt, ...)
 	exit(1);
 }
 
-char next(struct parser *p)
+static char next(struct parser *p)
 {
 	return *p->str;
 }
 
-char consume(struct parser *p)
+static char consume(struct parser *p)
 {
 	char ret = *p->str++;
 	if (p->skip_space)
@@ -59,26 +59,26 @@ char consume(struct parser *p)
 	return ret;
 }
 
-void consume_span(struct parser *p, int chars)
+static void consume_span(struct parser *p, int chars)
 {
 	p->str = p->str + chars;
 	if (p->skip_space)
 		p->str = skip_space(p->str);
 }
 
-void unexpected_token(struct parser *p)
+static void unexpected_token(struct parser *p)
 {
 	parse_error(p, "unexpected token '%c'", *p->str);
 }
 
-void expect(struct parser *p, char ch)
+static void expect(struct parser *p, char ch)
 {
 	if (next(p) != ch)
 		parse_error(p, "unexpected token '%c', expected '%c'", *p->str, ch);
 	consume(p);
 }
 
-unsigned short parse_hexquad(struct parser *p)
+static unsigned short parse_hexquad(struct parser *p)
 {
 	unsigned short val = 0;
 	int i;
@@ -97,7 +97,7 @@ unsigned short parse_hexquad(struct parser *p)
 	return val;
 }
 
-unsigned int parse_escaped_char(struct parser *p)
+static unsigned int parse_escaped_char(struct parser *p)
 {
 	char ch;
 	expect(p, '\\');
@@ -124,7 +124,7 @@ unsigned int parse_escaped_char(struct parser *p)
 	return ch;
 }
 
-const char *parse_raw_string(struct parser *p)
+static const char *parse_raw_string(struct parser *p)
 {
 	int i, len = 0, pos = 0;
 	unsigned int *tmp = malloc(1);
@@ -204,7 +204,7 @@ const char *parse_raw_string(struct parser *p)
 }
 
 
-struct json_value *parse_string(struct parser *p)
+static struct json_value *parse_string(struct parser *p)
 {
 	struct json_value *ret;
 	int len = 0;
@@ -215,9 +215,9 @@ struct json_value *parse_string(struct parser *p)
 	return ret;
 }
 
-struct json_value *parse_value(struct parser *p);
+static struct json_value *parse_value(struct parser *p);
 
-struct json_value *parse_object(struct parser *p)
+static struct json_value *parse_object(struct parser *p)
 {
 	struct json_value *ret;
 
@@ -256,7 +256,7 @@ struct json_value *parse_object(struct parser *p)
 	return ret;
 }
 
-struct json_value *parse_array(struct parser *p)
+static struct json_value *parse_array(struct parser *p)
 {
 	struct json_value *ret = malloc(sizeof(*ret));
 	ret->type = JSON_ARRAY;
@@ -289,7 +289,7 @@ struct json_value *parse_array(struct parser *p)
 	return ret;
 }
 
-struct json_value *parse_number(struct parser *p)
+static struct json_value *parse_number(struct parser *p)
 {
 	const char *start = p->str;
 	struct json_value *ret = malloc(sizeof(*ret));
@@ -324,7 +324,7 @@ struct json_value *parse_number(struct parser *p)
 	return ret;
 }
 
-struct json_value *parse_value(struct parser *p)
+static struct json_value *parse_value(struct parser *p)
 {
 	switch (next(p)) {
 	case '{': return parse_object(p);
