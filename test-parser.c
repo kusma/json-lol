@@ -132,10 +132,16 @@ static char *read_file(FILE *fp)
 	return buf;
 }
 
+static void error(int line, const char *str)
+{
+	fprintf(stderr, "line %d: %s\n", line, str);
+	exit(1);
+}
+
 int main()
 {
 	char *str = read_file(stdin);
-	struct json_value *value = json_parse(str);
+	struct json_value *value = json_parse(str, error);
 	json_dump(value, 0);
 	putchar('\n');
 	return 0;

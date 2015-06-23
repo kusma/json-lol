@@ -5,45 +5,60 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <setjmp.h>
 
-static const char *skip_space(const char *str)
+struct parser {
+	const char *str;
+	jmp_buf jmp;
+	char error[1024];
+	int line;
+	unsigned char skip_space : 1;
+};
+
+static void skip_space(struct parser *p)
 {
+	const char *str = p->str;
 	while (1) {
 		switch (*str) {
-		case '\t':
 		case '\n':
+			p->line++;
+			++str;
+			break;
+
 		case '\r':
+			p->line++;
+			++str;
+			if (*str == '\n')
+				++str;
+			break;
+
+		case '\t':
 		case ' ':
 			++str;
 			break;
 
 		default:
-			return str;
+			p->str = str;
+			return;
 		}
 	}
 }
 
-struct parser {
-	const char *str;
-	const char *error;
-	unsigned char skip_space : 1;
-};
-
 static void init_parser(struct parser *p, const char *str)
 {
 	p->skip_space = 1;
-	p->str = skip_space(str);
-	p->error = NULL;
+	p->str = str;
+	p->line = 1;
+	skip_space(p);
 }
 
 static void parse_error(struct parser *p, const char *fmt, ...)
 {
 	va_list va;
 	va_start(va, fmt);
-	vfprintf(stderr, fmt, va);
-	putc('\n', stderr);
+	vsnprintf(p->error, sizeof(p->error), fmt, va);
 	va_end(va);
-	exit(1);
+	longjmp(p->jmp, -1);
 }
 
 static char next(struct parser *p)
@@ -55,7 +70,7 @@ static char consume(struct parser *p)
 {
 	char ret = *p->str++;
 	if (p->skip_space)
-		p->str = skip_space(p->str);
+		skip_space(p);
 	return ret;
 }
 
@@ -63,7 +78,7 @@ static void consume_span(struct parser *p, int chars)
 {
 	p->str = p->str + chars;
 	if (p->skip_space)
-		p->str = skip_space(p->str);
+		skip_space(p);
 }
 
 static void unexpected_token(struct parser *p)
@@ -360,10 +375,18 @@ static struct json_value *parse_value(struct parser *p)
 	}
 }
 
-struct json_value *json_parse(const char *str)
+struct json_value *json_parse(const char *str,
+                              void (*err)(int, const char *))
 {
 	struct json_value *ret;
 	struct parser p;
+
+	if (setjmp(p.jmp)) {
+		if (err)
+			err(p.line, p.error);
+		return NULL;
+	}
+
 	init_parser(&p, str);
 	ret = parse_value(&p);
 	expect(&p, '\0');
