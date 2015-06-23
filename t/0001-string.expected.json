@@ -1,0 +1,11 @@
+[
+	"foo",
+	"foo\n",
+	"foo\nbar",
+	"foo"bar",
+	"\xF0\x9D\x9D\x9D",
+	"\xED\xA0\xA0",
+	"\xED\xA0\xA0_",
+	"\xED\xB4\xB4",
+	"\xED\xB4\xB4_"
+]

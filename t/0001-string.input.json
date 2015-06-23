@@ -1,0 +1,11 @@
+[
+	"foo",
+	"foo\n",
+	"foo\nbar",
+	"foo\"bar",
+	"\uD834\uDD1E",
+	"\uD834",
+	"\uD834_",
+	"\uDD1E",
+	"\uDD1E_"
+]
