@@ -9,7 +9,7 @@ void print_string(const char *str)
 		char ch = *str++;
 		switch (ch) {
 		case '\"':
-			printf("\"");
+			printf("\\\"");
 			continue;
 
 		case '\\':
