@@ -2,7 +2,7 @@
 	"foo" : [
 		"b\nar",
 		-10.000000,
-		"foo \xF0\x9D\x84\x9E "
+		"foo \xF0\x80\x80\x80 - \xED\x80\x80B"
 	]
 
 }
