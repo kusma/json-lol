@@ -74,7 +74,8 @@ static void unexpected_token(struct parser *p)
 static void expect(struct parser *p, char ch)
 {
 	if (next(p) != ch)
-		parse_error(p, "unexpected token '%c', expected '%c'", *p->str, ch);
+		parse_error(p, "unexpected token '%c', expected '%c'",
+		            *p->str, ch);
 	consume(p);
 }
 
