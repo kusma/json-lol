@@ -78,7 +78,7 @@ void json_dump(struct json_value *obj, int ind)
 			printf("\n");
 		}
 		indent(ind);
-		printf("}\n");
+		printf("}");
 		break;
 
 	case JSON_ARRAY:
@@ -89,7 +89,7 @@ void json_dump(struct json_value *obj, int ind)
 			printf("%s\n", i != obj->value.array.num_values - 1 ? "," : "");
 		}
 		indent(ind);
-		printf("]\n");
+		printf("]");
 		break;
 
 	case JSON_BOOLEAN:
@@ -137,5 +137,6 @@ int main()
 	char *str = read_file(stdin);
 	struct json_value *value = json_parse(str);
 	json_dump(value, 0);
+	putchar('\n');
 	return 0;
 }
