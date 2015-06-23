@@ -3,6 +3,7 @@
 	"foo\n",
 	"foo\nbar",
 	"foo\"bar",
+	"foo\\bar",
 	"\xF0\x9D\x9D\x9D",
 	"\xED\xA0\xA0",
 	"\xED\xA0\xA0_",

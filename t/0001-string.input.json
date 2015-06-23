@@ -3,6 +3,7 @@
 	"foo\n",
 	"foo\nbar",
 	"foo\"bar",
+	"foo\\bar",
 	"\uD834\uDD1E",
 	"\uD834",
 	"\uD834_",
