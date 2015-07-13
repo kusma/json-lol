@@ -6,6 +6,12 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <setjmp.h>
+#include <errno.h>
+
+struct alloc {
+	struct alloc *prev, *next;
+	char data[0];
+};
 
 struct parser {
 	const char *str;
@@ -13,6 +19,7 @@ struct parser {
 	char error[1024];
 	int line;
 	unsigned char skip_space : 1;
+	struct alloc *alloc_head;
 };
 
 static void skip_space(struct parser *p)
@@ -59,6 +66,56 @@ static void parse_error(struct parser *p, const char *fmt, ...)
 	vsnprintf(p->error, sizeof(p->error), fmt, va);
 	va_end(va);
 	longjmp(p->jmp, -1);
+}
+
+static void *mem_alloc(struct parser *p, size_t size)
+{
+	struct alloc *a = malloc(sizeof(struct alloc) + size);
+	if (!a)
+		parse_error(p, "malloc failed: %s", strerror(errno));
+
+	a->prev = NULL;
+	a->next = p->alloc_head;
+	if (p->alloc_head)
+		p->alloc_head->prev = a;
+	p->alloc_head = a;
+
+	return &a->data;
+}
+
+static void *mem_realloc(struct parser *p, void *ptr, size_t size)
+{
+	struct alloc *a, *new;
+
+	if (!ptr)
+		return mem_alloc(p, size);
+
+	a = ptr - offsetof(struct alloc, data);
+
+	new = realloc(a, sizeof(struct alloc) + size);
+	if (!new)
+		parse_error(p, "realloc failed: %s", strerror(errno));
+
+	if (new->next)
+		new->next->prev = new;
+	if (new->prev)
+		new->prev->next = new;
+	if (p->alloc_head == a)
+		p->alloc_head = new;
+
+	return &new->data;
+}
+
+static void mem_free(struct parser *p, void *ptr)
+{
+	struct alloc *a = ptr - offsetof(struct alloc, data);
+
+	if (a->next)
+		a->next->prev = a->prev;
+	if (a->prev)
+		a->prev->next = a->next;
+	if (p->alloc_head == a)
+		p->alloc_head = a->next;
 }
 
 static char next(struct parser *p)
@@ -144,7 +201,7 @@ static unsigned int parse_escaped_char(struct parser *p)
 static const char *parse_raw_string(struct parser *p)
 {
 	int i, len = 0, pos = 0;
-	unsigned int *tmp = malloc(1);
+	unsigned int *tmp = mem_alloc(p, 1);
 	char *ret;
 
 	expect(p, '"');
@@ -165,9 +222,7 @@ static const char *parse_raw_string(struct parser *p)
 					if (ch > 0x10ffff)
 						parse_error(p, "invalid unicode code-point");
 				} else {
-					tmp = realloc(tmp, (len + 2) * sizeof(*tmp));
-					if (!tmp)
-						parse_error(p, "out of memory");
+					tmp = mem_realloc(p, tmp, (len + 2) * sizeof(*tmp));
 					tmp[len++] = ch;
 					tmp[len++] = ch2;
 					continue;
@@ -181,19 +236,13 @@ static const char *parse_raw_string(struct parser *p)
 			ch = consume(p);
 		}
 
-		tmp = realloc(tmp, (len + 1) * sizeof(*tmp));
-		if (!tmp)
-			parse_error(p, "out of memory");
-
+		tmp = mem_realloc(p, tmp, (len + 1) * sizeof(*tmp));
 		tmp[len++] = ch;
 	}
 	p->skip_space = 1;
 	consume(p);
 
-	ret = malloc(len * 4 + 1);
-	if (!ret)
-		parse_error(p, "out of memory");
-
+	ret = mem_alloc(p, len * 4 + 1);
 	for (i = 0; i < len; ++i) {
 		unsigned int ch = tmp[i], bm = 0;
 		int j, t = 0;
@@ -216,16 +265,14 @@ static const char *parse_raw_string(struct parser *p)
 	assert(pos <= 4 * len);
 	ret[pos] = '\0';
 
-	free(tmp);
+	mem_free(p, tmp);
 	return ret; /* TODO: trim 'ret' to actually used size */
 }
 
 
 static struct json_value *parse_string(struct parser *p)
 {
-	struct json_value *ret;
-
-	ret = malloc(sizeof(*ret));
+	struct json_value *ret = mem_alloc(p, sizeof(*ret));
 	ret->type = JSON_STRING;
 	ret->value.string = parse_raw_string(p);
 	return ret;
@@ -235,9 +282,7 @@ static struct json_value *parse_value(struct parser *p);
 
 static struct json_value *parse_object(struct parser *p)
 {
-	struct json_value *ret;
-
-	ret = malloc(sizeof(*ret));
+	struct json_value *ret = mem_alloc(p, sizeof(*ret));
 	ret->type = JSON_OBJECT;
 	ret->value.object.properties = NULL;
 	ret->value.object.num_properties = 0;
@@ -255,9 +300,10 @@ static struct json_value *parse_object(struct parser *p)
 		expect(p, ':');
 		value = parse_value(p);
 
-		tmp = realloc(ret->value.object.properties, sizeof(*ret->value.object.properties) * (ret->value.object.num_properties + 1));
-		if (!tmp)
-			parse_error(p, "out of memory");
+		tmp = mem_realloc(p, ret->value.object.properties,
+		                  sizeof(*ret->value.object.properties) *
+		                  (ret->value.object.num_properties + 1));
+
 		ret->value.object.properties = tmp;
 		ret->value.object.properties[ret->value.object.num_properties].name = name;
 		ret->value.object.properties[ret->value.object.num_properties].value = value;
@@ -274,7 +320,7 @@ static struct json_value *parse_object(struct parser *p)
 
 static struct json_value *parse_array(struct parser *p)
 {
-	struct json_value *ret = malloc(sizeof(*ret));
+	struct json_value *ret = mem_alloc(p, sizeof(*ret));
 	ret->type = JSON_ARRAY;
 	ret->value.array.values = NULL;
 	ret->value.array.num_values = 0;
@@ -289,9 +335,10 @@ static struct json_value *parse_array(struct parser *p)
 		void *tmp;
 		struct json_value *value = parse_value(p);
 
-		tmp = realloc(ret->value.array.values, sizeof(*ret->value.array.values) * (ret->value.array.num_values + 1));
-		if (!tmp)
-			parse_error(p, "out of memory");
+		tmp = mem_realloc(p, ret->value.array.values,
+		                  sizeof(*ret->value.array.values) *
+		                  (ret->value.array.num_values + 1));
+
 		ret->value.array.values = tmp;
 		ret->value.array.values[ret->value.array.num_values] = value;
 		++ret->value.array.num_values;
@@ -308,7 +355,7 @@ static struct json_value *parse_array(struct parser *p)
 static struct json_value *parse_number(struct parser *p)
 {
 	const char *start = p->str;
-	struct json_value *ret = malloc(sizeof(*ret));
+	struct json_value *ret = mem_alloc(p, sizeof(*ret));
 	ret->type = JSON_NUMBER;
 
 	if (next(p) == '-')
@@ -354,19 +401,19 @@ static struct json_value *parse_value(struct parser *p)
 
 	default:
 		if (!strncmp(p->str, "true", 4)) {
-			struct json_value *ret = malloc(sizeof(*ret));
+			struct json_value *ret = mem_alloc(p, sizeof(*ret));
 			ret->type = JSON_BOOLEAN;
 			ret->value.boolean = 1;
 			consume_span(p, 4);
 			return ret;
 		} else if (!strncmp(p->str, "false", 5)) {
-			struct json_value *ret = malloc(sizeof(*ret));
+			struct json_value *ret = mem_alloc(p, sizeof(*ret));
 			ret->type = JSON_BOOLEAN;
 			ret->value.boolean = 0;
 			consume_span(p, 5);
 			return ret;
 		} else if (!strncmp(p->str, "null", 4)) {
-			struct json_value *ret = malloc(sizeof(*ret));
+			struct json_value *ret = mem_alloc(p, sizeof(*ret));
 			ret->type = JSON_NULL;
 			consume_span(p, 4);
 			return ret;
@@ -380,8 +427,16 @@ struct json_value *json_parse(const char *str,
 {
 	struct json_value *ret;
 	struct parser p;
+	p.alloc_head = NULL;
 
 	if (setjmp(p.jmp)) {
+		struct alloc *curr = p.alloc_head;
+		while (curr != NULL) {
+			void *mem = curr;
+			curr = curr->next;
+			free(mem);
+		}
+
 		if (err)
 			err(p.line, p.error);
 		return NULL;
@@ -390,5 +445,8 @@ struct json_value *json_parse(const char *str,
 	init_parser(&p, str);
 	ret = parse_value(&p);
 	expect(&p, '\0');
+
+	/* TODO: orphan all memory in "ret" */
+
 	return ret;
 }
