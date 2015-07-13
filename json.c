@@ -224,7 +224,6 @@ static const char *parse_raw_string(struct parser *p)
 static struct json_value *parse_string(struct parser *p)
 {
 	struct json_value *ret;
-	int len = 0;
 
 	ret = malloc(sizeof(*ret));
 	ret->type = JSON_STRING;
