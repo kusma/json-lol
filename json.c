@@ -116,6 +116,8 @@ static void mem_free(struct parser *p, void *ptr)
 		a->prev->next = a->next;
 	if (p->alloc_head == a)
 		p->alloc_head = a->next;
+
+	free(a);
 }
 
 static char next(struct parser *p)
