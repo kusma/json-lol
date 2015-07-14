@@ -13,7 +13,7 @@ struct alloc {
 	char data[0];
 };
 
-struct parser {
+struct json_parser {
 	const char *str;
 	jmp_buf jmp;
 	char error[1024];
@@ -22,7 +22,7 @@ struct parser {
 	struct alloc *alloc_head;
 };
 
-static void skip_space(struct parser *p)
+static void skip_space(struct json_parser *p)
 {
 	const char *str = p->str;
 	while (1) {
@@ -51,7 +51,7 @@ static void skip_space(struct parser *p)
 	}
 }
 
-static void init_parser(struct parser *p, const char *str)
+static void init_parser(struct json_parser *p, const char *str)
 {
 	p->skip_space = 1;
 	p->str = str;
@@ -59,7 +59,7 @@ static void init_parser(struct parser *p, const char *str)
 	skip_space(p);
 }
 
-static void parse_error(struct parser *p, const char *fmt, ...)
+static void parse_error(struct json_parser *p, const char *fmt, ...)
 {
 	va_list va;
 	va_start(va, fmt);
@@ -68,7 +68,7 @@ static void parse_error(struct parser *p, const char *fmt, ...)
 	longjmp(p->jmp, -1);
 }
 
-static void *mem_alloc(struct parser *p, size_t size)
+static void *mem_alloc(struct json_parser *p, size_t size)
 {
 	struct alloc *a = malloc(sizeof(struct alloc) + size);
 	if (!a)
@@ -83,7 +83,7 @@ static void *mem_alloc(struct parser *p, size_t size)
 	return &a->data;
 }
 
-static void *mem_realloc(struct parser *p, void *ptr, size_t size)
+static void *mem_realloc(struct json_parser *p, void *ptr, size_t size)
 {
 	struct alloc *a, *new;
 
@@ -106,7 +106,7 @@ static void *mem_realloc(struct parser *p, void *ptr, size_t size)
 	return &new->data;
 }
 
-static void mem_free(struct parser *p, void *ptr)
+static void mem_free(struct json_parser *p, void *ptr)
 {
 	struct alloc *a = ptr - offsetof(struct alloc, data);
 
@@ -120,12 +120,12 @@ static void mem_free(struct parser *p, void *ptr)
 	free(a);
 }
 
-static char next(struct parser *p)
+static char next(struct json_parser *p)
 {
 	return *p->str;
 }
 
-static char consume(struct parser *p)
+static char consume(struct json_parser *p)
 {
 	char ret = *p->str++;
 	if (p->skip_space)
@@ -133,19 +133,19 @@ static char consume(struct parser *p)
 	return ret;
 }
 
-static void consume_span(struct parser *p, int chars)
+static void consume_span(struct json_parser *p, int chars)
 {
 	p->str = p->str + chars;
 	if (p->skip_space)
 		skip_space(p);
 }
 
-static void unexpected_token(struct parser *p)
+static void unexpected_token(struct json_parser *p)
 {
 	parse_error(p, "unexpected token '%c'", *p->str);
 }
 
-static void expect(struct parser *p, char ch)
+static void expect(struct json_parser *p, char ch)
 {
 	if (next(p) != ch)
 		parse_error(p, "unexpected token '%c', expected '%c'",
@@ -154,7 +154,7 @@ static void expect(struct parser *p, char ch)
 		consume(p);
 }
 
-static unsigned short parse_hexquad(struct parser *p)
+static unsigned short parse_hexquad(struct json_parser *p)
 {
 	unsigned short val = 0;
 	int i;
@@ -173,7 +173,7 @@ static unsigned short parse_hexquad(struct parser *p)
 	return val;
 }
 
-static unsigned int parse_escaped_char(struct parser *p)
+static unsigned int parse_escaped_char(struct json_parser *p)
 {
 	char ch;
 	expect(p, '\\');
@@ -200,7 +200,7 @@ static unsigned int parse_escaped_char(struct parser *p)
 	return ch;
 }
 
-static const char *parse_raw_string(struct parser *p)
+static const char *parse_raw_string(struct json_parser *p)
 {
 	int i, len = 0, pos = 0;
 	unsigned int *tmp = mem_alloc(p, 1);
@@ -272,7 +272,7 @@ static const char *parse_raw_string(struct parser *p)
 }
 
 
-static struct json_value *parse_string(struct parser *p)
+static struct json_value *parse_string(struct json_parser *p)
 {
 	struct json_value *ret = mem_alloc(p, sizeof(*ret));
 	ret->type = JSON_STRING;
@@ -280,9 +280,9 @@ static struct json_value *parse_string(struct parser *p)
 	return ret;
 }
 
-static struct json_value *parse_value(struct parser *p);
+static struct json_value *parse_value(struct json_parser *p);
 
-static struct json_value *parse_object(struct parser *p)
+static struct json_value *parse_object(struct json_parser *p)
 {
 	struct json_value *ret = mem_alloc(p, sizeof(*ret));
 	ret->type = JSON_OBJECT;
@@ -320,7 +320,7 @@ static struct json_value *parse_object(struct parser *p)
 	return ret;
 }
 
-static struct json_value *parse_array(struct parser *p)
+static struct json_value *parse_array(struct json_parser *p)
 {
 	struct json_value *ret = mem_alloc(p, sizeof(*ret));
 	ret->type = JSON_ARRAY;
@@ -354,7 +354,7 @@ static struct json_value *parse_array(struct parser *p)
 	return ret;
 }
 
-static struct json_value *parse_number(struct parser *p)
+static struct json_value *parse_number(struct json_parser *p)
 {
 	const char *start = p->str;
 	struct json_value *ret = mem_alloc(p, sizeof(*ret));
@@ -389,7 +389,7 @@ static struct json_value *parse_number(struct parser *p)
 	return ret;
 }
 
-static struct json_value *parse_value(struct parser *p)
+static struct json_value *parse_value(struct json_parser *p)
 {
 	switch (next(p)) {
 	case '{': return parse_object(p);
@@ -424,31 +424,45 @@ static struct json_value *parse_value(struct parser *p)
 	}
 }
 
-struct json_value *json_parse(const char *str,
+struct json_parser *json_create_parser(void)
+{
+	struct json_parser *p = malloc(sizeof(*p));
+	if (!p)
+		return NULL;
+
+	p->alloc_head = NULL;
+	return p;
+}
+
+void json_destroy_parser(struct json_parser *p)
+{
+	struct alloc *curr = p->alloc_head;
+	while (curr != NULL) {
+		void *mem = curr;
+		curr = curr->next;
+		free(mem);
+	}
+	free(p);
+}
+
+struct json_value *json_parse(struct json_parser *p, const char *str,
                               void (*err)(int, const char *))
 {
 	struct json_value *ret;
-	struct parser p;
-	p.alloc_head = NULL;
 
-	if (setjmp(p.jmp)) {
-		struct alloc *curr = p.alloc_head;
-		while (curr != NULL) {
-			void *mem = curr;
-			curr = curr->next;
-			free(mem);
-		}
-
+	if (setjmp(p->jmp)) {
 		if (err)
-			err(p.line, p.error);
+			err(p->line, p->error);
 		return NULL;
 	}
 
-	init_parser(&p, str);
-	ret = parse_value(&p);
-	expect(&p, '\0');
+	p->skip_space = 1;
+	p->str = str;
+	p->line = 1;
+	skip_space(p);
 
-	/* TODO: orphan all memory in "ret" */
+	ret = parse_value(p);
+	expect(p, '\0');
 
 	return ret;
 }

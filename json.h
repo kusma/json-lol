@@ -29,7 +29,11 @@ struct json_value {
 	} value;
 };
 
-struct json_value *json_parse(const char *str,
-                              void (*err)(int line, const char *str));
+struct json_parser;
+
+struct json_parser *json_create_parser(void);
+void json_destroy_parser(struct json_parser *p);
+struct json_value *json_parse(struct json_parser *p, const char *str,
+                              void (*err)(int, const char *));
 
 #endif /* JSON_H */

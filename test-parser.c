@@ -135,14 +135,25 @@ static char *read_file(FILE *fp)
 static void error(int line, const char *str)
 {
 	fprintf(stderr, "line %d: %s\n", line, str);
-	exit(1);
 }
 
 int main()
 {
 	char *str = read_file(stdin);
-	struct json_value *value = json_parse(str, error);
+	struct json_parser *p = json_create_parser();
+	struct json_value *value = json_parse(p, str, error);
+
+	if (!value) {
+		json_destroy_parser(p);
+		free(str);
+		exit(1);
+	}
+
 	json_dump(value, 0);
 	putchar('\n');
+
+	json_destroy_parser(p);
+	free(str);
+
 	return 0;
 }
