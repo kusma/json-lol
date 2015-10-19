@@ -228,53 +228,50 @@ static int encode_utf8(char *dst, unsigned int *src, int len)
 
 static const char *parse_raw_string(struct json_parser *p)
 {
-	int len = 0, pos = 0;
-	unsigned int *tmp = mem_alloc(p, 1);
-	char *ret;
+	size_t alloc = 16, len = 0;
+	char *ret = mem_alloc(p, alloc);
 
 	expect(p, '"');
 	p->skip_space = 0;
 	while (next(p) != '"') {
-		unsigned int ch;
+		unsigned int buf[2], chars = 1;
 		switch (next(p)) {
 		case '\\':
-			ch = parse_escaped_char(p);
+			buf[0] = parse_escaped_char(p);
 
-			if (ch >= 0xd800 && ch <= 0xdbff && next(p) == '\\') {
+			if (buf[0] >= 0xd800 && buf[0] <= 0xdbff && next(p) == '\\') {
 				/* start surrogate pair */
-				unsigned int ch2 = parse_escaped_char(p);
-				if (ch2 >= 0xdc00 && ch2 <= 0xdfff) {
+				buf[1] = parse_escaped_char(p);
+				if (buf[1] >= 0xdc00 && buf[1] <= 0xdfff) {
 					/* end surrogate pair */
-					ch = (ch << 10) + ch2 - 0x35fdc00;
-					if (ch > 0x10ffff)
+					buf[0] = (buf[0] << 10) + buf[1] - 0x35fdc00;
+					if (buf[0] > 0x10ffff)
 						parse_error(p, "invalid unicode code-point");
-				} else {
-					tmp = mem_realloc(p, tmp, (len + 2) * sizeof(*tmp));
-					tmp[len++] = ch;
-					tmp[len++] = ch2;
-					continue;
-				}
+				} else
+					chars = 2;
 			}
 			break;
 
 		default:
 			if (iscntrl(next(p)))
 				unexpected_token(p);
-			ch = consume(p);
+			buf[0] = consume(p);
 		}
 
-		tmp = mem_realloc(p, tmp, (len + 1) * sizeof(*tmp));
-		tmp[len++] = ch;
+		/* Worst case length is 6 UTF-8 bytes, plus termination */
+		if (len > alloc - 6 - 1) {
+			alloc = (alloc * 3) >> 1; /* grow by 150% */
+			ret = mem_realloc(p, ret, alloc);
+		}
+
+		len += encode_utf8(ret + len, buf, chars);
 	}
 	p->skip_space = 1;
 	consume(p);
 
-	ret = mem_alloc(p, len * 4 + 1);
-	pos = encode_utf8(ret, tmp, len);
-	ret[pos] = '\0';
-
-	mem_free(p, tmp);
-	return ret; /* TODO: trim 'ret' to actually used size */
+	assert(alloc > len);
+	ret[len] = '\0';
+	return ret;
 }
 
 
