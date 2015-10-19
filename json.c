@@ -200,9 +200,35 @@ static unsigned int parse_escaped_char(struct json_parser *p)
 	return ch;
 }
 
+static int encode_utf8(char *dst, unsigned int *src, int len)
+{
+	int i, ret = 0;
+	for (i = 0; i < len; ++i) {
+		unsigned int ch = src[i], bm = 0;
+		int j, t = 0;
+
+		if (ch >= 0x10000) {
+			t = 3;
+			bm = 0xf0;
+		} else if (ch >= 0x800) {
+			t = 2;
+			bm = 0xe0;
+		} else if (ch >= 0x80) {
+			t = 1;
+			bm = 0xc0;
+		}
+
+		dst[ret++] = bm | (ch >> (6 * t)) & 0x7f;
+		for (j = 0; j < t; ++j)
+			dst[ret++] = 0x80 | (ch >> (6 * (t - 1 - i))) & 0xbf;
+	}
+	assert(ret <= 4 * len);
+	return ret;
+}
+
 static const char *parse_raw_string(struct json_parser *p)
 {
-	int i, len = 0, pos = 0;
+	int len = 0, pos = 0;
 	unsigned int *tmp = mem_alloc(p, 1);
 	char *ret;
 
@@ -244,26 +270,7 @@ static const char *parse_raw_string(struct json_parser *p)
 	consume(p);
 
 	ret = mem_alloc(p, len * 4 + 1);
-	for (i = 0; i < len; ++i) {
-		unsigned int ch = tmp[i], bm = 0;
-		int j, t = 0;
-
-		if (ch >= 0x10000) {
-			t = 3;
-			bm = 0xf0;
-		} else if (ch >= 0x800) {
-			t = 2;
-			bm = 0xe0;
-		} else if (ch >= 0x80) {
-			t = 1;
-			bm = 0xc0;
-		}
-
-		ret[pos++] = bm | (ch >> (6 * t)) & 0x7f;
-		for (j = 0; j < t; ++j)
-			ret[pos++] = 0x80 | (ch >> (6 * (t - 1 - i))) & 0xbf;
-	}
-	assert(pos <= 4 * len);
+	pos = encode_utf8(ret, tmp, len);
 	ret[pos] = '\0';
 
 	mem_free(p, tmp);
