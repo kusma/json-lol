@@ -437,7 +437,7 @@ struct json_parser *json_create_parser(void)
 	return p;
 }
 
-void json_destroy_parser(struct json_parser *p)
+static void free_allocs(struct json_parser *p)
 {
 	struct alloc *curr = p->alloc_head;
 	while (curr != NULL) {
@@ -445,6 +445,12 @@ void json_destroy_parser(struct json_parser *p)
 		curr = curr->next;
 		free(mem);
 	}
+	p->alloc_head = NULL;
+}
+
+void json_destroy_parser(struct json_parser *p)
+{
+	free_allocs(p);
 	free(p);
 }
 
@@ -456,6 +462,8 @@ struct json_value *json_parse(struct json_parser *p, const char *str,
 	if (setjmp(p->jmp)) {
 		if (err)
 			err(p->line, p->error);
+
+		free_allocs(p);
 		return NULL;
 	}
 
