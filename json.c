@@ -209,8 +209,7 @@ static const char *parse_raw_string(struct json_parser *p)
 	expect(p, '"');
 	p->skip_space = 0;
 	while (next(p) != '"') {
-		unsigned int ch, bm = 0;
-		int i, t = 0;
+		unsigned int ch;
 		switch (next(p)) {
 		case '\\':
 			ch = parse_escaped_char(p);
