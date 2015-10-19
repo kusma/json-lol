@@ -1,12 +1,12 @@
 #include "json.h"
 
+#include <assert.h>
+#include <errno.h>
+#include <setjmp.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <stdlib.h>
-#include <assert.h>
-#include <setjmp.h>
-#include <errno.h>
 
 struct alloc {
 	struct alloc *prev, *next;
