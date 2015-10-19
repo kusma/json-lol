@@ -5,6 +5,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -70,7 +71,12 @@ static void parse_error(struct json_parser *p, const char *fmt, ...)
 
 static void *mem_alloc(struct json_parser *p, size_t size)
 {
-	struct alloc *a = malloc(sizeof(struct alloc) + size);
+	struct alloc *a;
+
+	if (size > SIZE_MAX - sizeof(struct alloc))
+		parse_error(p, "too large allocation");
+
+	a = malloc(sizeof(struct alloc) + size);
 	if (!a)
 		parse_error(p, "malloc failed: %s", strerror(errno));
 
@@ -260,6 +266,9 @@ static const char *parse_raw_string(struct json_parser *p)
 
 		/* Worst case length is 6 UTF-8 bytes, plus termination */
 		if (len > alloc - 6 - 1) {
+			if (alloc > SIZE_MAX / 3)
+				parse_error(p, "too long string");
+
 			alloc = (alloc * 3) >> 1; /* grow by 150% */
 			ret = mem_realloc(p, ret, alloc);
 		}
@@ -305,6 +314,9 @@ static struct json_value *parse_object(struct json_parser *p)
 		expect(p, ':');
 		value = parse_value(p);
 
+		if (ret->value.array.num_values == SIZE_MAX / sizeof(void *))
+			parse_error(p, "too big object");
+
 		tmp = mem_realloc(p, ret->value.object.properties,
 		                  sizeof(*ret->value.object.properties) *
 		                  (ret->value.object.num_properties + 1));
@@ -339,6 +351,9 @@ static struct json_value *parse_array(struct json_parser *p)
 	while (1) {
 		void *tmp;
 		struct json_value *value = parse_value(p);
+
+		if (ret->value.array.num_values == SIZE_MAX / sizeof(void *))
+			parse_error(p, "too big array");
 
 		tmp = mem_realloc(p, ret->value.array.values,
 		                  sizeof(*ret->value.array.values) *
