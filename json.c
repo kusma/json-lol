@@ -245,16 +245,23 @@ static const char *parse_raw_string(struct json_parser *p)
 		case '\\':
 			buf[0] = parse_escaped_char(p);
 
-			if (buf[0] >= 0xd800 && buf[0] <= 0xdbff && next(p) == '\\') {
+			if (buf[0] >= 0xd800 && buf[0] <= 0xdbff) {
 				/* start surrogate pair */
-				buf[1] = parse_escaped_char(p);
-				if (buf[1] >= 0xdc00 && buf[1] <= 0xdfff) {
-					/* end surrogate pair */
-					buf[0] = (buf[0] << 10) + buf[1] - 0x35fdc00;
-					assert(buf[0] <= 0x10ffff);
+				if (next(p) == '\\') {
+					buf[1] = parse_escaped_char(p);
+					if (buf[1] >= 0xdc00 && buf[1] <= 0xdfff) {
+						/* end surrogate pair */
+						buf[0] = (buf[0] << 10) + buf[1] - 0x35fdc00;
+						assert(buf[0] <= 0x10ffff);
+					} else {
+						buf[0] = 0xfffd; /* U+FFFD */
+						chars = 2;
+					}
 				} else
-					chars = 2;
-			}
+					buf[0] = 0xfffd; /* U+FFFD */
+			} else if (buf[0] >= 0xdc00 && buf[0] <= 0xdfff)
+				buf[0] = 0xfffd; /* U+FFFD */
+
 			break;
 
 		default:
