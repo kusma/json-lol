@@ -226,7 +226,7 @@ static int encode_utf8(char *dst, unsigned int *src, int len)
 
 		dst[ret++] = bm | (ch >> (6 * t)) & 0x7f;
 		for (j = 0; j < t; ++j)
-			dst[ret++] = 0x80 | (ch >> (6 * (t - 1 - i))) & 0xbf;
+			dst[ret++] = 0x80 | (ch >> (6 * (t - 1 - j))) & 0xbf;
 	}
 	assert(ret <= 4 * len);
 	return ret;
