@@ -146,16 +146,22 @@ static void consume_span(struct json_parser *p, int chars)
 		skip_space(p);
 }
 
+#define PR(buf, c) (sprintf((buf), isgraph(c) ? "'%c'" : "\\x%02x", (c)), (buf))
+
 static void unexpected_token(struct json_parser *p)
 {
-	parse_error(p, "unexpected token '%c'", *p->str);
+	char tmp[32];
+	parse_error(p, "unexpected token %s", PR(tmp, next(p)));
 }
 
 static void expect(struct json_parser *p, char ch)
 {
-	if (next(p) != ch)
-		parse_error(p, "unexpected token '%c', expected '%c'",
-		            *p->str, ch);
+	if (next(p) != ch) {
+		char a[32], b[32];
+		parse_error(p, "unexpected token %s, expected %s",
+		            PR(a, next(p)), PR(a, ch));
+	}
+
 	if (ch != '\0')
 		consume(p);
 }
