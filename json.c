@@ -251,8 +251,7 @@ static const char *parse_raw_string(struct json_parser *p)
 				if (buf[1] >= 0xdc00 && buf[1] <= 0xdfff) {
 					/* end surrogate pair */
 					buf[0] = (buf[0] << 10) + buf[1] - 0x35fdc00;
-					if (buf[0] > 0x10ffff)
-						parse_error(p, "invalid unicode code-point");
+					assert(buf[0] <= 0x10ffff);
 				} else
 					chars = 2;
 			}
