@@ -18,7 +18,8 @@ struct alloc {
 };
 
 struct json_parser {
-	const char *str;
+	int next_token;
+	const unsigned char *str;
 	jmp_buf jmp;
 	char error[1024];
 	int line;
@@ -26,9 +27,9 @@ struct json_parser {
 	struct alloc *alloc_head;
 };
 
-static void skip_space(struct json_parser *p)
+static const unsigned char *skip_space(struct json_parser *p)
 {
-	const char *str = p->str;
+	const unsigned char *str = p->str;
 	while (1) {
 		switch (*str) {
 		case '\n':
@@ -49,10 +50,47 @@ static void skip_space(struct json_parser *p)
 			break;
 
 		default:
-			p->str = str;
-			return;
+			return p->str = str;
 		}
 	}
+}
+
+static int get_token(struct json_parser *p)
+{
+	const unsigned char *str = p->skip_space ? skip_space(p) : p->str;
+	int ch = *str++;
+	if (ch > 127) {
+		/* parse UTF-8 */
+		static const int overlong[] = {0x7f, 0x7ff, 0xffff, 0x10ffff};
+		static const int repl = 0xfffd; /* U+FFFD */
+		int t = 0, i;
+		if ((ch & 0xe0) == 0xc0)
+			t = 1;
+		else if ((ch & 0xf0) == 0xe0)
+			t = 2;
+		else if ((ch & 0xf8) == 0xf0)
+			t = 3;
+		else {
+			p->str = str;
+			return repl;
+		}
+
+		ch &= 0x3f >> t;
+
+		for (i = 0; i < t; ++i) {
+			int ch2 = *str++;
+			if ((ch2 & 0xc0) != 0x80) { /* not trailing */
+				p->str = str - 1;
+				return repl;
+			}
+			ch = (ch << 6) | (ch2 & 0x3f);
+		}
+
+		if (overlong[t - 1] > ch || ch > overlong[t])
+			ch = repl;
+	}
+	p->str = str;
+	return ch;
 }
 
 static void parse_error(struct json_parser *p, const char *fmt, ...)
@@ -107,16 +145,15 @@ static void *mem_realloc(struct json_parser *p, void *ptr, size_t size)
 	return &new->data;
 }
 
-static char next(struct json_parser *p)
+static int next(struct json_parser *p)
 {
-	return *p->str;
+	return p->next_token;
 }
 
-static char consume(struct json_parser *p)
+static int consume(struct json_parser *p)
 {
-	char ret = *p->str++;
-	if (p->skip_space)
-		skip_space(p);
+	int ret = p->next_token;
+	p->next_token = get_token(p);
 	return ret;
 }
 
@@ -249,7 +286,7 @@ static const char *parse_raw_string(struct json_parser *p)
 			break;
 
 		default:
-			if (iscntrl(next(p)))
+			if (next(p) < 128 && iscntrl(next(p)))
 				unexpected_token(p);
 			buf[0] = consume(p);
 		}
@@ -364,7 +401,7 @@ static struct json_value *parse_array(struct json_parser *p)
 
 static struct json_value *parse_number(struct json_parser *p)
 {
-	const char *start = p->str;
+	const char *start = (const char *)p->str - 1;
 	char *end;
 	struct json_value *ret = mem_alloc(p, sizeof(*ret));
 	ret->type = JSON_NUMBER;
@@ -493,9 +530,9 @@ struct json_value *json_parse(struct json_parser *p, const char *str,
 	}
 
 	p->skip_space = 1;
-	p->str = str;
+	p->str = (const unsigned char *)str;
 	p->line = 1;
-	skip_space(p);
+	p->next_token = get_token(p);
 
 	ret = parse_value(p);
 	expect(p, '\0');
