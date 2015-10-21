@@ -131,13 +131,6 @@ static char consume(struct json_parser *p)
 	return ret;
 }
 
-static void consume_span(struct json_parser *p, int chars)
-{
-	p->str = p->str + chars;
-	if (p->skip_space)
-		skip_space(p);
-}
-
 #define PR(buf, c) (sprintf((buf), isgraph(c) ? "'%c'" : "\\x%02x", (c)), (buf))
 
 static void unexpected_token(struct json_parser *p)
@@ -411,6 +404,18 @@ static struct json_value *parse_number(struct json_parser *p)
 	return ret;
 }
 
+int match_keyword(struct json_parser *p, const char *str, int len)
+{
+	return !strncmp(p->str, str, len);
+}
+
+static void consume_keyword(struct json_parser *p, int len)
+{
+	p->str = p->str + len;
+	if (p->skip_space)
+		skip_space(p);
+}
+
 static struct json_value *parse_value(struct json_parser *p)
 {
 	switch (next(p)) {
@@ -424,22 +429,22 @@ static struct json_value *parse_value(struct json_parser *p)
 		return parse_number(p);
 
 	default:
-		if (!strncmp(p->str, "true", 4)) {
+		if (match_keyword(p, "true", 4)) {
 			struct json_value *ret = mem_alloc(p, sizeof(*ret));
 			ret->type = JSON_BOOLEAN;
 			ret->value.boolean = 1;
-			consume_span(p, 4);
+			consume_keyword(p, 4);
 			return ret;
-		} else if (!strncmp(p->str, "false", 5)) {
+		} else if (match_keyword(p, "false", 5)) {
 			struct json_value *ret = mem_alloc(p, sizeof(*ret));
 			ret->type = JSON_BOOLEAN;
 			ret->value.boolean = 0;
-			consume_span(p, 5);
+			consume_keyword(p, 5);
 			return ret;
-		} else if (!strncmp(p->str, "null", 4)) {
+		} else if (match_keyword(p, "null", 4)) {
 			struct json_value *ret = mem_alloc(p, sizeof(*ret));
 			ret->type = JSON_NULL;
-			consume_span(p, 4);
+			consume_keyword(p, 4);
 			return ret;
 		}
 		unexpected_token(p);
