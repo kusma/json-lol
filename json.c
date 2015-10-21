@@ -52,14 +52,6 @@ static void skip_space(struct json_parser *p)
 	}
 }
 
-static void init_parser(struct json_parser *p, const char *str)
-{
-	p->skip_space = 1;
-	p->str = str;
-	p->line = 1;
-	skip_space(p);
-}
-
 static void parse_error(struct json_parser *p, const char *fmt, ...)
 {
 	va_list va;
