@@ -132,7 +132,7 @@ static void expect(struct json_parser *p, char ch)
 	if (next(p) != ch) {
 		char a[32], b[32];
 		parse_error(p, "unexpected token %s, expected %s",
-		            PR(a, next(p)), PR(a, ch));
+		            PR(a, next(p)), PR(b, ch));
 	}
 
 	if (ch != '\0')
