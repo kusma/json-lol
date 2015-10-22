@@ -360,6 +360,7 @@ static struct json_value *parse_array(struct json_parser *p)
 static struct json_value *parse_number(struct json_parser *p)
 {
 	const char *start = p->str;
+	char *end;
 	struct json_value *ret = mem_alloc(p, sizeof(*ret));
 	ret->type = JSON_NUMBER;
 
@@ -388,7 +389,10 @@ static struct json_value *parse_number(struct json_parser *p)
 			consume(p);
 	}
 
-	ret->value.number = atof(start);
+	ret->value.number = strtod(start, &end);
+	if (end == start)
+		parse_error(p, "strtod failed: %s", strerror(errno));
+
 	return ret;
 }
 
