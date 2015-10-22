@@ -60,7 +60,7 @@ void indent(int indent)
 
 void json_dump(struct json_value *obj, int ind)
 {
-	int i, j;
+	int i;
 	switch (obj->type) {
 	case JSON_STRING:
 		print_string(obj->value.string);
