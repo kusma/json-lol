@@ -143,13 +143,23 @@ int main()
 {
 	char *str = read_file(stdin);
 	struct json_parser *p = json_create_parser();
-	struct json_value *value = json_parse(p, str, error);
+	struct json_value *value;
 
+#if defined(_GNU_SOURCE) || defined(MSC_VER)
+	char *loc = setlocale(LC_ALL, NULL);
+	setlocale(LC_ALL, "");
+#endif
+
+	value = json_parse(p, str, error);
 	if (!value) {
 		json_destroy_parser(p);
 		free(str);
 		exit(0);
 	}
+
+#if defined(_GNU_SOURCE) || defined(MSC_VER)
+	setlocale(LC_ALL, loc);
+#endif
 
 	json_dump(value, 0);
 	putchar('\n');

@@ -6,7 +6,7 @@ clean:
 	$(RM) test-parser
 
 test-parser: test-parser.c json.c json.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) test-parser.c json.c -o test-parser
+	$(CC) -D_GNU_SOURCE $(CPPFLAGS) $(CFLAGS) test-parser.c json.c -o test-parser
 
 check: test-parser
 	@                                                                \

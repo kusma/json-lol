@@ -11,6 +11,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __APPLE__
+#include <xlocale.h>
+#else
+#include <locale.h>
+#endif
 
 struct alloc {
 	struct alloc *prev, *next;
@@ -24,6 +29,11 @@ struct json_parser {
 	int line;
 	unsigned char skip_space : 1;
 	struct alloc *alloc_head;
+#ifdef _GNU_SOURCE
+	locale_t c_locale;
+#elif defined(MSC_VER)
+	_locale_t c_locale;
+#endif
 };
 
 static void skip_space(struct json_parser *p)
@@ -402,7 +412,11 @@ static struct json_value *parse_number(struct json_parser *p)
 			consume(p);
 	}
 
+#if defined(_GNU_SOURCE) || defined(MSC_VER)
+	ret->value.number = strtod_l(start, &end, p->c_locale);
+#else
 	ret->value.number = strtod(start, &end);
+#endif
 	if (end == start)
 		parse_error(p, "strtod failed: %s", strerror(errno));
 
@@ -459,6 +473,11 @@ struct json_parser *json_create_parser(void)
 		return NULL;
 
 	p->alloc_head = NULL;
+#ifdef _GNU_SOURCE
+	p->c_locale = newlocale(LC_NUMERIC_MASK, "C", NULL);
+#elif defined(MSC_VER)
+	p->c_locale = _create_locale(LC_NUMERIC, "C");
+#endif
 	return p;
 }
 
@@ -476,6 +495,11 @@ static void free_allocs(struct json_parser *p)
 void json_destroy_parser(struct json_parser *p)
 {
 	free_allocs(p);
+#ifdef _GNU_SOURCE
+	freelocale(p->c_locale);
+#elif defined(MSC_VER)
+	_free_locale(p->c_locale);
+#endif
 	free(p);
 }
 
