@@ -439,8 +439,8 @@ static struct json_value *parse_value(struct json_parser *p)
 			consume_keyword(p, 4);
 			return ret;
 		}
-		unexpected_token(p);
 	}
+	return unexpected_token(p), NULL;
 }
 
 struct json_parser *json_create_parser(void)
