@@ -106,20 +106,6 @@ static void *mem_realloc(struct json_parser *p, void *ptr, size_t size)
 	return &new->data;
 }
 
-static void mem_free(struct json_parser *p, void *ptr)
-{
-	struct alloc *a = ptr - offsetof(struct alloc, data);
-
-	if (a->next)
-		a->next->prev = a->prev;
-	if (a->prev)
-		a->prev->next = a->next;
-	if (p->alloc_head == a)
-		p->alloc_head = a->next;
-
-	free(a);
-}
-
 static char next(struct json_parser *p)
 {
 	return *p->str;
