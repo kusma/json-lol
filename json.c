@@ -203,9 +203,9 @@ static int encode_utf8(char *dst, unsigned int *src, int len)
 			bm = 0xc0;
 		}
 
-		dst[ret++] = bm | (ch >> (6 * t)) & 0x7f;
-		for (j = 0; j < t; ++j)
-			dst[ret++] = 0x80 | (ch >> (6 * (t - 1 - j))) & 0xbf;
+		dst[ret++] = bm | ((ch >> (6 * t)) & 0x7f);
+		for (j = 1; j <= t; ++j)
+			dst[ret++] = 0x80 | ((ch >> (6 * (t - j))) & 0xbf);
 	}
 	assert(ret <= 4 * len);
 	return ret;
