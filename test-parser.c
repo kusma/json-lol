@@ -1,6 +1,8 @@
 #include "json.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <locale.h>
 
 void print_string(const char *str)
 {

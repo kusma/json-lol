@@ -1,6 +1,7 @@
 #include "json.h"
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <setjmp.h>
 #include <stdarg.h>
@@ -8,6 +9,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct alloc {
 	struct alloc *prev, *next;
