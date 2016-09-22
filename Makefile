@@ -9,7 +9,13 @@ test-parser: test-parser.c json.c json.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) test-parser.c json.c -o test-parser
 
 check: test-parser
-	./test-parser <t/0000-basic.input.json >t/0000-basic.output.json && \
-	diff t/0000-basic.expected.json t/0000-basic.output.json && \
-	./test-parser <t/0001-string.input.json >t/0001-string.output.json && \
-	diff t/0001-string.expected.json t/0001-string.output.json
+	@                                                     \
+	for input in t/*.input.json;                          \
+	do                                                    \
+		output=$${input%.input.json}.output.json;     \
+		expected=$${input%.input.json}.expected.json; \
+		echo $$input;                                 \
+		./test-parser <$$input >$$output &&           \
+		diff $$expected $$output ||                   \
+		exit;                                         \
+	done
