@@ -380,6 +380,10 @@ static struct json_value *parse_number(struct json_parser *p)
 
 	if (next(p) == '.') {
 		consume(p);
+
+		if (!isdigit(next(p)))
+			unexpected_token(p);
+
 		while (isdigit(next(p)))
 			consume(p);
 	}
