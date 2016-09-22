@@ -136,7 +136,7 @@ static char *read_file(FILE *fp)
 
 static void error(int line, const char *str)
 {
-	fprintf(stderr, "line %d: %s\n", line, str);
+	printf("ERROR:%d: %s\n", line, str);
 }
 
 int main()
@@ -148,7 +148,7 @@ int main()
 	if (!value) {
 		json_destroy_parser(p);
 		free(str);
-		exit(1);
+		exit(0);
 	}
 
 	json_dump(value, 0);
