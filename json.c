@@ -124,7 +124,11 @@ static char consume(struct json_parser *p)
 static void unexpected_token(struct json_parser *p)
 {
 	char tmp[32];
-	parse_error(p, "unexpected token %s", PR(tmp, next(p)));
+	char ch = next(p);
+	if (ch == '\0')
+		parse_error(p, "unexpected end of input");
+	else
+		parse_error(p, "unexpected token %s", PR(tmp, ch));
 }
 
 static void expect(struct json_parser *p, char ch)
