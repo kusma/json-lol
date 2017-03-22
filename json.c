@@ -408,20 +408,19 @@ static struct json_value *parse_number(struct json_parser *p)
 	return ret;
 }
 
-int match_keyword(struct json_parser *p, const char *str, int len)
+static struct json_value *parse_keyword(struct json_parser *p, const char *str, int len)
 {
-	return !strncmp(p->str, str, len);
-}
-
-static void consume_keyword(struct json_parser *p, int len)
-{
-	p->str = p->str + len;
-	if (p->skip_space)
-		skip_space(p);
+	int i;
+	assert(p->str[0] == str[0]); /* should already be matched at this point */
+	consume(p);
+	for (i = 1; i < len; ++i)
+		expect(p, str[i]);
+	return mem_alloc(p, sizeof(struct json_value));
 }
 
 static struct json_value *parse_value(struct json_parser *p)
 {
+	struct json_value *ret;
 	switch (next(p)) {
 	case '{': return parse_object(p);
 	case '[': return parse_array(p);
@@ -432,25 +431,22 @@ static struct json_value *parse_value(struct json_parser *p)
 	case '5': case '6': case '7': case '8': case '9':
 		return parse_number(p);
 
-	default:
-		if (match_keyword(p, "true", 4)) {
-			struct json_value *ret = mem_alloc(p, sizeof(*ret));
-			ret->type = JSON_BOOLEAN;
-			ret->value.boolean = 1;
-			consume_keyword(p, 4);
-			return ret;
-		} else if (match_keyword(p, "false", 5)) {
-			struct json_value *ret = mem_alloc(p, sizeof(*ret));
-			ret->type = JSON_BOOLEAN;
-			ret->value.boolean = 0;
-			consume_keyword(p, 5);
-			return ret;
-		} else if (match_keyword(p, "null", 4)) {
-			struct json_value *ret = mem_alloc(p, sizeof(*ret));
-			ret->type = JSON_NULL;
-			consume_keyword(p, 4);
-			return ret;
-		}
+	case 't':
+		ret = parse_keyword(p, "true", 4);
+		ret->type = JSON_BOOLEAN;
+		ret->value.boolean = 1;
+		return ret;
+
+	case 'f':
+		ret = parse_keyword(p, "false", 5);
+		ret->type = JSON_BOOLEAN;
+		ret->value.boolean = 0;
+		return ret;
+
+	case 'n':
+		ret = parse_keyword(p, "null", 4);
+		ret->type = JSON_NULL;
+		return ret;
 	}
 	return unexpected_token(p), NULL;
 }
