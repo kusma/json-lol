@@ -1,3 +1,11 @@
 language: c
 
+addons:
+  apt:
+    packages:
+    - valgrind
+
+before_script:
+  - export TESTS_ENVIRONMENT="valgrind -q"
+
 script: make all check
