@@ -411,7 +411,7 @@ static struct json_value *parse_number(struct json_parser *p)
 static struct json_value *parse_keyword(struct json_parser *p, const char *str, int len)
 {
 	int i;
-	assert(p->str[0] == str[0]); /* should already be matched at this point */
+	assert(next(p) == str[0]); /* should already be matched at this point */
 	consume(p);
 	for (i = 1; i < len; ++i)
 		expect(p, str[i]);
