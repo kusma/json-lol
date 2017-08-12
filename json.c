@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -303,7 +304,7 @@ static struct json_value *parse_object(struct json_parser *p)
 		expect(p, ':');
 		value = parse_value(p);
 
-		if (ret->value.array.num_values == SIZE_MAX / sizeof(void *))
+		if (ret->value.array.num_values == INT_MAX / sizeof(void *))
 			parse_error(p, "too big object");
 
 		tmp = mem_realloc(p, ret->value.object.properties,
@@ -341,7 +342,7 @@ static struct json_value *parse_array(struct json_parser *p)
 		void *tmp;
 		struct json_value *value = parse_value(p);
 
-		if (ret->value.array.num_values == SIZE_MAX / sizeof(void *))
+		if (ret->value.array.num_values == INT_MAX / sizeof(void *))
 			parse_error(p, "too big array");
 
 		tmp = mem_realloc(p, ret->value.array.values,
