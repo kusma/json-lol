@@ -18,6 +18,9 @@ struct alloc {
 };
 
 struct json_parser {
+	struct json_sax_cb *cb;
+	void *user;
+
 	const char *str;
 	jmp_buf jmp;
 	char error[1024];
@@ -274,100 +277,67 @@ static const char *parse_raw_string(struct json_parser *p)
 }
 
 
-static struct json_value *parse_string(struct json_parser *p)
+static void parse_string(struct json_parser *p)
 {
-	struct json_value *ret = mem_alloc(p, sizeof(*ret));
-	ret->type = JSON_STRING;
-	ret->value.string = parse_raw_string(p);
-	return ret;
+	p->cb->on_string(p->user, parse_raw_string(p));
 }
 
-static struct json_value *parse_value(struct json_parser *p);
+static void parse_value(struct json_parser *p);
 
-static struct json_value *parse_object(struct json_parser *p)
+static void parse_object(struct json_parser *p)
 {
-	struct json_value *ret = mem_alloc(p, sizeof(*ret));
-	ret->type = JSON_OBJECT;
-	ret->value.object.properties = NULL;
-	ret->value.object.num_properties = 0;
-
 	expect(p, '{');
+	p->cb->on_object_start(p->user);
+
 	if (next(p) == '}') {
 		consume(p);
-		return ret;
+		p->cb->on_object_end(p->user);
+		return;
 	}
 
 	while (1) {
 		void *tmp;
-		struct json_value *value;
 		const char *name = parse_raw_string(p);
+		p->cb->on_key(p->user, name);
+
 		expect(p, ':');
-		value = parse_value(p);
-
-		if (ret->value.object.num_properties == INT_MAX / sizeof(void *))
-			parse_error(p, "too big object");
-
-		tmp = mem_realloc(p, ret->value.object.properties,
-		                  sizeof(*ret->value.object.properties) *
-		                  (ret->value.object.num_properties + 1));
-
-		ret->value.object.properties = tmp;
-		ret->value.object.properties[ret->value.object.num_properties].name = name;
-		ret->value.object.properties[ret->value.object.num_properties].value = value;
-		++ret->value.object.num_properties;
-
+		parse_value(p);
 		if (next(p) == '}')
 			break;
 		expect(p, ',');
 	}
 	consume(p);
 
-	return ret;
+	p->cb->on_object_end(p->user);
 }
 
-static struct json_value *parse_array(struct json_parser *p)
+void parse_array(struct json_parser *p)
 {
-	struct json_value *ret = mem_alloc(p, sizeof(*ret));
-	ret->type = JSON_ARRAY;
-	ret->value.array.values = NULL;
-	ret->value.array.num_values = 0;
-
 	expect(p, '[');
+	p->cb->on_array_start(p->user);
+
 	if (next(p) == ']') {
 		consume(p);
-		return ret;
+		p->cb->on_array_end(p->user);
+		return;
 	}
 
 	while (1) {
-		void *tmp;
-		struct json_value *value = parse_value(p);
-
-		if (ret->value.array.num_values == INT_MAX / sizeof(void *))
-			parse_error(p, "too big array");
-
-		tmp = mem_realloc(p, ret->value.array.values,
-		                  sizeof(*ret->value.array.values) *
-		                  (ret->value.array.num_values + 1));
-
-		ret->value.array.values = tmp;
-		ret->value.array.values[ret->value.array.num_values] = value;
-		++ret->value.array.num_values;
-
+		parse_value(p);
 		if (next(p) == ']')
 			break;
 		expect(p, ',');
 	}
 	consume(p);
 
-	return ret;
+	p->cb->on_array_end(p->user);
 }
 
-static struct json_value *parse_number(struct json_parser *p)
+void parse_number(struct json_parser *p)
 {
+	double number;
 	const char *start = p->str;
 	char *end;
-	struct json_value *ret = mem_alloc(p, sizeof(*ret));
-	ret->type = JSON_NUMBER;
 
 	if (next(p) == '-')
 		consume(p);
@@ -402,11 +372,11 @@ static struct json_value *parse_number(struct json_parser *p)
 			consume(p);
 	}
 
-	ret->value.number = strtod(start, &end);
+	number = strtod(start, &end);
 	if (end == start)
 		parse_error(p, "strtod failed: %s", strerror(errno));
 
-	return ret;
+	p->cb->on_number(p->user, number);
 }
 
 static struct json_value *parse_keyword(struct json_parser *p, const char *str, int len)
@@ -419,37 +389,37 @@ static struct json_value *parse_keyword(struct json_parser *p, const char *str, 
 	return mem_alloc(p, sizeof(struct json_value));
 }
 
-static struct json_value *parse_value(struct json_parser *p)
+static void parse_value(struct json_parser *p)
 {
-	struct json_value *ret;
 	switch (next(p)) {
-	case '{': return parse_object(p);
-	case '[': return parse_array(p);
-	case '"': return parse_string(p);
+	case '{': parse_object(p); break;
+	case '[': parse_array(p); break;
+	case '"': parse_string(p); break;
 
 	case '-':
 	case '0': case '1': case '2': case '3': case '4':
 	case '5': case '6': case '7': case '8': case '9':
-		return parse_number(p);
+		parse_number(p);
+		break;
 
 	case 't':
-		ret = parse_keyword(p, "true", 4);
-		ret->type = JSON_BOOLEAN;
-		ret->value.boolean = 1;
-		return ret;
+		parse_keyword(p, "true", 4);
+		p->cb->on_boolean(p->user, 1);
+		break;
 
 	case 'f':
-		ret = parse_keyword(p, "false", 5);
-		ret->type = JSON_BOOLEAN;
-		ret->value.boolean = 0;
-		return ret;
+		parse_keyword(p, "false", 5);
+		p->cb->on_boolean(p->user, 0);
+		break;
 
 	case 'n':
-		ret = parse_keyword(p, "null", 4);
-		ret->type = JSON_NULL;
-		return ret;
+		parse_keyword(p, "null", 4);
+		p->cb->on_null(p->user);
+		break;
+
+	default:
+		unexpected_token(p);
 	}
-	return unexpected_token(p), NULL;
 }
 
 struct json_parser *json_create_parser(void)
@@ -479,26 +449,223 @@ void json_destroy_parser(struct json_parser *p)
 	free(p);
 }
 
-struct json_value *json_parse(struct json_parser *p, const char *str,
-                              void (*err)(int, const char *))
+int json_parse_sax(struct json_parser *p, const char *str,
+                   struct json_sax_cb *cb, void *user)
 {
-	struct json_value *ret;
-
 	if (setjmp(p->jmp)) {
-		if (err)
-			err(p->line, p->error);
+		if (cb->on_error)
+			cb->on_error(user, p->line, p->error);
 
 		free_allocs(p);
-		return NULL;
+		return -1;
 	}
 
+	p->cb = cb;
+	p->user = user;
 	p->skip_space = 1;
 	p->str = str;
 	p->line = 1;
 	skip_space(p);
 
-	ret = parse_value(p);
+	parse_value(p);
 	expect(p, '\0');
+	return 0;
+}
 
-	return ret;
+struct json_node {
+	struct json_node *parent;
+	struct json_value value;
+};
+
+struct json_dom_context
+{
+	struct json_parser *p;
+	struct json_node *curr, *root;
+	const char *key;
+	void (*on_err)(int, const char *);
+};
+
+struct json_dom_context *json_dom_context(void *user)
+{
+	return (struct json_dom_context*)user;
+}
+
+static void on_error(void *user , int line, const char *err)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+	ctx->on_err(line, err);
+}
+
+static void on_node(struct json_dom_context *ctx, struct json_node *node)
+{
+	struct json_node *parent_node = ctx->curr;
+	struct json_value *value = &node->value;
+
+	node->parent = parent_node;
+
+	if (parent_node) {
+		void *tmp;
+		struct json_value *parent = &parent_node->value;
+
+		switch (parent->type) {
+		case JSON_ARRAY:
+			if (parent->value.array.num_values == INT_MAX / sizeof(void *))
+				parse_error(ctx->p, "too big array");
+
+			parent->value.array.values = mem_realloc(ctx->p,
+				parent->value.array.values,
+				sizeof(*parent->value.array.values) *
+				(parent->value.array.num_values + 1));
+
+			parent->value.array.values[parent->value.array.num_values++] = value;
+
+			break;
+
+		case JSON_OBJECT:
+			if (parent->value.object.num_properties == INT_MAX / sizeof(void *))
+				parse_error(ctx->p, "too big object");
+
+			assert(ctx->key && "internal error: unexpected json-type");
+
+			tmp = mem_realloc(ctx->p,
+				parent->value.object.properties,
+				sizeof(*parent->value.object.properties) *
+				(parent->value.object.num_properties + 1));
+
+			parent->value.object.properties = tmp;
+			parent->value.object.properties[parent->value.object.num_properties].name = ctx->key;
+			parent->value.object.properties[parent->value.object.num_properties].value = value;
+			++parent->value.object.num_properties;
+			ctx->key = NULL;
+			break;
+
+		default:
+			assert(0 && "internal error: unexpected json-type");
+		}
+	} else {
+		assert(!ctx->root);
+		ctx->root = node;
+	}
+}
+
+static void on_null(void *user)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+
+	struct json_node *node = mem_alloc(ctx->p, sizeof(*node));
+	node->value.type = JSON_NULL;
+
+	on_node(ctx, node);
+}
+
+static void on_boolean(void *user, int boolean)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+
+	struct json_node *node = mem_alloc(ctx->p, sizeof(*node));
+	node->value.type = JSON_BOOLEAN;
+	node->value.value.boolean = boolean;
+
+	on_node(ctx, node);
+}
+
+static void on_number(void *user, double number)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+
+	struct json_node *node = mem_alloc(ctx->p, sizeof(*node));
+	node->value.type = JSON_NUMBER;
+	node->value.value.number = number;
+
+	on_node(ctx, node);
+}
+
+static void on_string(void *user, const char *string)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+
+	struct json_node *node = mem_alloc(ctx->p, sizeof(*node));
+	node->value.type = JSON_STRING;
+	node->value.value.string = string;
+
+	on_node(ctx, node);
+}
+
+static void on_array_start(void *user)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+
+	struct json_node *node = mem_alloc(ctx->p, sizeof(*node));
+	node->value.type = JSON_ARRAY;
+	node->value.value.array.values = NULL;
+	node->value.value.array.num_values = 0;
+	on_node(ctx, node);
+
+	ctx->curr = node;
+}
+
+static void on_array_end(void *user)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+	assert(ctx->curr != NULL);
+	ctx->curr = ctx->curr->parent;
+}
+
+static void on_object_start(void *user)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+
+	struct json_node *node = mem_alloc(ctx->p, sizeof(*node));
+	node->value.type = JSON_OBJECT;
+	node->value.value.object.properties = NULL;
+	node->value.value.object.num_properties = 0;
+	on_node(ctx, node);
+	ctx->curr = node;
+}
+
+static void on_key(void *user, const char *key)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+	ctx->key = key;
+}
+
+static void on_object_end(void *user)
+{
+	struct json_dom_context *ctx = json_dom_context(user);
+	assert(ctx->curr != NULL);
+	ctx->curr = ctx->curr->parent;
+}
+
+struct json_value *json_parse_dom(struct json_parser *p, const char *str,
+                                  void (*err)(int, const char *))
+{
+	struct json_dom_context ctx = {
+		p,
+		NULL,
+		NULL,
+		NULL,
+		err
+	};
+
+	struct json_sax_cb cb = {
+		on_error,
+		on_null,
+		on_boolean,
+		on_number,
+		on_string,
+
+		on_array_start,
+		on_array_end,
+
+		on_object_start,
+		on_key,
+		on_object_end
+	};
+
+
+	if (json_parse_sax(p, str, &cb, &ctx) < 0)
+		return NULL;
+
+	assert(ctx.root != NULL);
+	return &ctx.root->value;
 }

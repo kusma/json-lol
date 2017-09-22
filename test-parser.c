@@ -143,7 +143,7 @@ int main()
 {
 	char *str = read_file(stdin);
 	struct json_parser *p = json_create_parser();
-	struct json_value *value = json_parse(p, str, error);
+	struct json_value *value = json_parse_dom(p, str, error);
 
 	if (!value) {
 		json_destroy_parser(p);
