@@ -304,7 +304,7 @@ static struct json_value *parse_object(struct json_parser *p)
 		expect(p, ':');
 		value = parse_value(p);
 
-		if (ret->value.array.num_values == INT_MAX / sizeof(void *))
+		if (ret->value.object.num_properties == INT_MAX / sizeof(void *))
 			parse_error(p, "too big object");
 
 		tmp = mem_realloc(p, ret->value.object.properties,
