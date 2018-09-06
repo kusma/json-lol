@@ -22,17 +22,22 @@ struct json_sax_cb {
 
 struct json_value {
 	enum {
-		JSON_STRING,
-		JSON_NUMBER,
-		JSON_OBJECT,
-		JSON_ARRAY,
+		JSON_NULL,
 		JSON_BOOLEAN,
-		JSON_NULL
+		JSON_NUMBER,
+		JSON_STRING,
+		JSON_ARRAY,
+		JSON_OBJECT
 	} type;
 
 	union {
-		const char *string;
+		int boolean;
 		double number;
+		const char *string;
+		struct {
+			struct json_value **values;
+			int num_values;
+		} array;
 		struct {
 			struct {
 				const char *name;
@@ -40,11 +45,6 @@ struct json_value {
 			} *properties;
 			int num_properties;
 		} object;
-		struct {
-			struct json_value **values;
-			int num_values;
-		} array;
-		int boolean;
 	} value;
 };
 
